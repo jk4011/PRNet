@@ -3,6 +3,7 @@ import os
 from glob import glob
 import scipy.io as sio
 from skimage.io import imread, imsave
+import skvideo.io  
 from skimage.transform import rescale, resize
 from time import time
 import argparse
@@ -24,29 +25,30 @@ def main(args):
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu # GPU number, -1 for CPU
     prn = PRN(is_dlib = args.isDlib)
 
-    # ------------- load data
-    image_folder = args.inputDir
     save_folder = args.outputDir
     if not os.path.exists(save_folder):
         os.mkdir(save_folder)
 
-    types = ('*.jpg', '*.png')
-    image_path_list= []
-    for files in types:
-        image_path_list.extend(glob(os.path.join(image_folder, files)))
-    total_num = len(image_path_list)
+    
+    full_frames = []
+    vid = skvideo.io.vread(args.inputFile) # 비디오를 읽어옴
+    for i, frame in enumerate(vid): # 각 프레임 조회
+        full_frames.append(frame)
+    print("num of frames : ", len(full_frames))
+    for i, image in enumerate(full_frames):
 
-    for i, image_path in enumerate(image_path_list):
+        image = np.array(image)
+        print(image.shape)
 
-        name = image_path.strip().split('/')[-1][:-4]
-
-        # read image
-        image = imread(image_path)
+        name = str(i)
+        
+        while (len(name) != 4):
+            name = "0" + name
+            
         [h, w, c] = image.shape
         if c>3:
             image = image[:,:,:3]
 
-        # the core: regress position map
         if args.isDlib:
             max_size = max(image.shape[0], image.shape[1])
             if max_size> 1000:
@@ -73,9 +75,6 @@ def main(args):
             else:
                 save_vertices = vertices.copy()
             save_vertices[:,1] = h - 1 - save_vertices[:,1]
-
-        if args.isImage:
-            imsave(os.path.join(save_folder, name + '.jpg'), image)
 
         if args.is3d:
             # corresponding colors
@@ -130,7 +129,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Joint 3D Face Reconstruction and Dense Alignment with Position Map Regression Network')
 
-    parser.add_argument('-i', '--inputDir', default='TestImages/', type=str,
+    parser.add_argument('-i', '--inputFile', default='TestImages/', type=str,
                         help='path to the input directory, where input images are stored.')
     parser.add_argument('-o', '--outputDir', default='TestImages/results', type=str,
                         help='path to the output directory, where results(obj,txt files) will be stored.')
@@ -157,9 +156,9 @@ if __name__ == '__main__':
     parser.add_argument('--isDepth', default=False, type=ast.literal_eval,
                         help='whether to output depth image')
     # update in 2017/4/27
-    parser.add_argument('--isTexture', default=False, type=ast.literal_eval,
+    parser.add_argument('--isTexture', default=True, type=ast.literal_eval,
                         help='whether to save texture in obj file')
-    parser.add_argument('--isMask', default=False, type=ast.literal_eval,
+    parser.add_argument('--isMask', default=True, type=ast.literal_eval,
                         help='whether to set invisible pixels(due to self-occlusion) in texture as 0')
     # update in 2017/7/19
     parser.add_argument('--texture_size', default=256, type=int,
